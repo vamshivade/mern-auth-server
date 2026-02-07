@@ -12,12 +12,19 @@ const app = express();
 // Middleware
 app.use(
   cors({
-    origin: "https://mern-auth-client-lyart.vercel.app", // Later replace with Vercel URL
+    origin: "*", // Later replace with Vercel URL
+    // origin: "https://mern-auth-client-lyart.vercel.app", // Later replace with Vercel URL
     credentials: true,
   }),
 );
 
 app.use(express.json());
+
+// Logging Middleware
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl}`);
+  next();
+});
 
 app.use("/api/auth", authRoutes);
 

@@ -7,92 +7,101 @@ import jwt from "jsonwebtoken";
   @access  Public
 */
 export const registerUser = async (req, res) => {
+  console.log("-> registerUser hit");
   try {
-    const { name, email, password } = req.body;
+    const { name, email, password, role } = req.body;
 
-    // Check fields
     if (!name || !email || !password) {
+      console.log("-> Register failed: Missing fields");
       return res.status(400).json({
         message: "Please provide all fields",
       });
     }
 
-    // Check if user exists
     const userExists = await User.findOne({ email });
 
     if (userExists) {
+      console.log("-> Register failed: User already exists", email);
       return res.status(400).json({
         message: "User already exists",
       });
     }
 
-    // Create user
     const user = await User.create({
       name,
       email,
       password,
+      role: role || "user",
     });
 
-    // Generate JWT
     const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
       expiresIn: "7d",
     });
 
+    console.log("-> Register success:", user.email);
     res.status(201).json({
       _id: user._id,
       name: user.name,
       email: user.email,
+      role: user.role,
       token,
     });
   } catch (error) {
-    console.error(error);
-
+    console.error("-> Register Error:", error);
     res.status(500).json({
       message: "Server error",
     });
   }
 };
 
+/*
+  @desc    Login user
+  @route   POST /api/auth/login
+  @access  Public
+*/
 export const loginUser = async (req, res) => {
-  console.log("login hit");
-
+  console.log("-> loginUser hit");
   try {
     const { email, password } = req.body;
     if (!email || !password) {
+      console.log("-> Login failed: Missing fields");
       return res.status(400).json({
-        message: "all fields are required",
+        message: "All fields are required",
       });
     }
 
-    const userExists = await User.findOne({ email });
+    const user = await User.findOne({ email });
 
-    if (!userExists) {
+    if (!user) {
+      console.log("-> Login failed: User not found", email);
       return res.status(400).json({
-        message: "user not found",
+        message: "Invalid email",
       });
     }
 
-    const isPasswordValid = await userExists.matchPassword(password);
-    if (!isPasswordValid) {
-      return res.status(400).json({
-        message: "invalid credentials",
+    if (await user.matchPassword(password)) {
+      const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
+        expiresIn: "7d",
+      });
+
+      console.log("-> Login success:", user.email);
+      res.json({
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        token,
+      });
+    } else {
+      console.log("-> Login failed: Invalid password for", email);
+      res.status(400).json({
+        message: "Invalid password",
       });
     }
-
-    const token = jwt.sign({ id: userExists._id }, process.env.JWT_SECRET, {
-      expiresIn: "7d",
-    });
-
-    res.status(200).json({
-      _id: userExists._id,
-      name: userExists.name,
-      email: userExists.email,
-      token,
-    });
   } catch (error) {
-    console.log("error in login", error);
+    console.error("-> Login Error:", error);
     res.status(500).json({
-      message: "server error",
+      message: "Server error",
     });
   }
 };
@@ -103,20 +112,100 @@ export const loginUser = async (req, res) => {
   @access  Private
 */
 export const getUserProfile = async (req, res) => {
-  console.log("req.user:", req.user);
-  try {
-    if (!req.user) {
-      return res.status(401).json({
-        message: "Not authorized",
-      });
+  console.log("-> getUserProfile hit");
+  const user = await User.findById(req.user._id);
+
+  if (user) {
+    console.log("-> Profile fetched for:", user.email);
+    res.json({
+      _id: user._id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+    });
+  } else {
+    console.log("-> Profile failed: User not found");
+    res.status(404).json({
+      message: "User not found",
+    });
+  }
+};
+
+/*
+  @desc    Get all users
+  @route   GET /api/auth/users
+  @access  Private/Admin
+*/
+export const getUsers = async (req, res) => {
+  console.log("-> getUsers hit (Admin)");
+  const users = await User.find({});
+  console.log(`-> Fetched ${users.length} users`);
+  res.json(users);
+};
+
+/*
+  @desc    Delete user
+  @route   DELETE /api/auth/users/:id
+  @access  Private/Admin
+*/
+export const deleteUser = async (req, res) => {
+  console.log("-> deleteUser hit (Admin)");
+  const userToDelete = await User.findById(req.params.id);
+
+  if (userToDelete) {
+    await userToDelete.deleteOne();
+    console.log("-> User removed:", userToDelete.email);
+    res.json({ message: "User removed" });
+  } else {
+    console.log("-> Delete failed: User not found");
+    res.status(404).json({ message: "User not found" });
+  }
+};
+
+/*
+  @desc    Get user by ID
+  @route   GET /api/auth/users/:id
+  @access  Private/Admin
+*/
+export const getUserById = async (req, res) => {
+  console.log("-> getUserById hit (Admin)");
+  const user = await User.findById(req.params.id).select("-password");
+  if (user) {
+    console.log("-> User found:", user.email);
+    res.json(user);
+  } else {
+    console.log("-> User not found");
+    res.status(404).json({ message: "User not found" });
+  }
+};
+
+/*
+  @desc    Update user
+  @route   PUT /api/auth/users/:id
+  @access  Private/Admin
+*/
+export const updateUser = async (req, res) => {
+  console.log("-> updateUser hit (Admin)");
+  const user = await User.findById(req.params.id);
+
+  if (user) {
+    user.name = req.body.name || user.name;
+    user.email = req.body.email || user.email;
+    if (req.body.role) {
+      user.role = req.body.role;
     }
 
-    res.json(req.user);
-  } catch (error) {
-    console.error(error);
+    const updatedUser = await user.save();
+    console.log("-> User updated:", updatedUser.email);
 
-    res.status(500).json({
-      message: "Server error",
+    res.json({
+      _id: updatedUser._id,
+      name: updatedUser.name,
+      email: updatedUser.email,
+      role: updatedUser.role,
     });
+  } else {
+    console.log("-> Update failed: User not found");
+    res.status(404).json({ message: "User not found" });
   }
 };
