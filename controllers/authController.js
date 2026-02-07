@@ -52,3 +52,45 @@ export const registerUser = async (req, res) => {
     });
   }
 };
+
+export const loginUser = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({
+        message: "all fields are required",
+      });
+    }
+
+    const userExists = await User.findOne({ email });
+
+    if (!userExists) {
+      return res.status(400).json({
+        message: "user not found",
+      });
+    }
+
+    const isPasswordValid = await userExists.matchPassword(password);
+    if (!isPasswordValid) {
+      return res.status(400).json({
+        message: "invalid credentials",
+      });
+    }
+
+    const token = jwt.sign({ id: userExists._id }, process.env.JWT_SECRET, {
+      expiresIn: "7d",
+    });
+
+    res.status(200).json({
+      _id: userExists._id,
+      name: userExists.name,
+      email: userExists.email,
+      token,
+    });
+  } catch (error) {
+    console.log("error in login", error);
+    res.status(500).json({
+      message: "server error",
+    });
+  }
+};
