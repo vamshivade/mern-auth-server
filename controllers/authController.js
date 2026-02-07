@@ -54,6 +54,8 @@ export const registerUser = async (req, res) => {
 };
 
 export const loginUser = async (req, res) => {
+  console.log("login hit");
+
   try {
     const { email, password } = req.body;
     if (!email || !password) {
@@ -91,6 +93,30 @@ export const loginUser = async (req, res) => {
     console.log("error in login", error);
     res.status(500).json({
       message: "server error",
+    });
+  }
+};
+
+/*
+  @desc    Get user profile
+  @route   GET /api/auth/profile
+  @access  Private
+*/
+export const getUserProfile = async (req, res) => {
+  console.log("req.user:", req.user);
+  try {
+    if (!req.user) {
+      return res.status(401).json({
+        message: "Not authorized",
+      });
+    }
+
+    res.json(req.user);
+  } catch (error) {
+    console.error(error);
+
+    res.status(500).json({
+      message: "Server error",
     });
   }
 };
