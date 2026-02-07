@@ -10,7 +10,13 @@ connectDB();
 const app = express();
 
 // Middleware
-app.use(cors());
+app.use(
+  cors({
+    origin: "*", // Later replace with Vercel URL
+    credentials: true,
+  }),
+);
+
 app.use(express.json());
 
 app.use("/api/auth", authRoutes);
